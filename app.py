@@ -2,71 +2,67 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
-from sklearn.preprocessing import LabelEncoder
+import warnings
 
 # -----------------------------
-# Load Models and Encoders
+# Suppress warnings (optional)
 # -----------------------------
-@st.cache_data
-def load_models():
-    models = {}
-    try:
-        with open("logistic_model.pkl", "rb") as f:
-            models['Logistic Regression'] = pickle.load(f)
-        with open("decision_tree_model.pkl", "rb") as f:
-            models['Decision Tree'] = pickle.load(f)
-        with open("random_forest_model.pkl", "rb") as f:
-            models['Random Forest'] = pickle.load(f)
-        with open("svc_model.pkl", "rb") as f:
-            models['SVC'] = pickle.load(f)
-    except Exception as e:
-        st.error(f"Error loading models: {e}")
-    return models
-
-@st.cache_data
-def load_encoders():
-    try:
-        with open("feature_encoders.pkl", "rb") as f:
-            encoders = pickle.load(f)
-    except Exception as e:
-        st.error(f"Error loading encoders: {e}")
-        encoders = {}
-    return encoders
-
-# Load models and encoders
-models = load_models()
-feature_encoders = load_encoders()
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # -----------------------------
-# Streamlit App
+# Load saved models & encoders
+# -----------------------------
+with open("models/feature_encoders.pkl", "rb") as f:
+    feature_encoders = pickle.load(f)
+
+with open("models/logistic_model.pkl", "rb") as f:
+    logistic_model = pickle.load(f)
+
+with open("models/decision_tree_model.pkl", "rb") as f:
+    decision_tree_model = pickle.load(f)
+
+with open("models/random_forest_model.pkl", "rb") as f:
+    random_forest_model = pickle.load(f)
+
+with open("models/svc_model.pkl", "rb") as f:
+    svc_model = pickle.load(f)
+
+models = {
+    "Logistic Regression": logistic_model,
+    "Decision Tree": decision_tree_model,
+    "Random Forest": random_forest_model,
+    "SVC": svc_model
+}
+
+# -----------------------------
+# Streamlit App UI
 # -----------------------------
 st.title("Lung Cancer Prediction App")
-st.write("Fill in the patient details to predict lung cancer risk.")
 
-# -----------------------------
-# User Input
-# -----------------------------
-# Define input fields (update these according to your dataset)
+st.sidebar.header("Input Patient Data")
+
 def user_input_features():
-    Age = st.number_input("Age", min_value=1, max_value=120, value=50)
-    Gender = st.selectbox("Gender", ("Male", "Female"))
-    Smoking = st.selectbox("Smoking", ("Yes", "No"))
-    Yellow_Fingers = st.selectbox("Yellow Fingers", ("Yes", "No"))
-    Anxiety = st.selectbox("Anxiety", ("Yes", "No"))
-    Peer_Pressure = st.selectbox("Peer Pressure", ("Yes", "No"))
-    Chronic_Disease = st.selectbox("Chronic Disease", ("Yes", "No"))
-    Fatigue = st.selectbox("Fatigue", ("Yes", "No"))
-    Allergy = st.selectbox("Allergy", ("Yes", "No"))
-    Wheezing = st.selectbox("Wheezing", ("Yes", "No"))
-    Alcohol_Consumption = st.selectbox("Alcohol Consumption", ("Yes", "No"))
-    Coughing = st.selectbox("Coughing", ("Yes", "No"))
-    Shortness_of_Breath = st.selectbox("Shortness of Breath", ("Yes", "No"))
-    Swallowing_Difficulty = st.selectbox("Swallowing Difficulty", ("Yes", "No"))
-    Chest_Pain = st.selectbox("Chest Pain", ("Yes", "No"))
-
+    Gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
+    Age = st.sidebar.slider("Age", 1, 120, 30)
+    Smoking = st.sidebar.selectbox("Smoking", ["Yes", "No"])
+    Yellow_Fingers = st.sidebar.selectbox("Yellow Fingers", ["Yes", "No"])
+    Anxiety = st.sidebar.selectbox("Anxiety", ["Yes", "No"])
+    Peer_Pressure = st.sidebar.selectbox("Peer Pressure", ["Yes", "No"])
+    Chronic_Disease = st.sidebar.selectbox("Chronic Disease", ["Yes", "No"])
+    Fatigue = st.sidebar.selectbox("Fatigue", ["Yes", "No"])
+    Allergy = st.sidebar.selectbox("Allergy", ["Yes", "No"])
+    Wheezing = st.sidebar.selectbox("Wheezing", ["Yes", "No"])
+    Alcohol_Consuming = st.sidebar.selectbox("Alcohol Consuming", ["Yes", "No"])
+    Coughing = st.sidebar.selectbox("Coughing", ["Yes", "No"])
+    Shortness_of_Breath = st.sidebar.selectbox("Shortness of Breath", ["Yes", "No"])
+    Swallowing_Difficulty = st.sidebar.selectbox("Swallowing Difficulty", ["Yes", "No"])
+    Chest_Pain = st.sidebar.selectbox("Chest Pain", ["Yes", "No"])
+    
     data = {
-        "Age": Age,
         "Gender": Gender,
+        "Age": Age,
         "Smoking": Smoking,
         "Yellow_Fingers": Yellow_Fingers,
         "Anxiety": Anxiety,
@@ -75,13 +71,14 @@ def user_input_features():
         "Fatigue": Fatigue,
         "Allergy": Allergy,
         "Wheezing": Wheezing,
-        "Alcohol_Consumption": Alcohol_Consumption,
+        "Alcohol_Consuming": Alcohol_Consuming,
         "Coughing": Coughing,
         "Shortness_of_Breath": Shortness_of_Breath,
         "Swallowing_Difficulty": Swallowing_Difficulty,
         "Chest_Pain": Chest_Pain
     }
-    features = pd.DataFrame([data])
+    
+    features = pd.DataFrame(data, index=[0])
     return features
 
 patient_data = user_input_features()
@@ -90,36 +87,28 @@ patient_data = user_input_features()
 # Encode categorical features safely
 # -----------------------------
 for col, le in feature_encoders.items():
-    # Skip target column and any missing columns
-    if col == 'Level' or col not in patient_data.columns:
-        continue
-    patient_data[col] = le.transform(patient_data[col])
+    if col in patient_data.columns:
+        patient_data[col] = le.transform(patient_data[col])
 
 # -----------------------------
-# Model Selection
+# Model selection
 # -----------------------------
-st.subheader("Select Model")
-model_choice = st.selectbox("Choose a model", list(models.keys()))
+model_choice = st.sidebar.selectbox("Select Model", list(models.keys()))
 selected_model = models[model_choice]
 
 # -----------------------------
 # Prediction
 # -----------------------------
 if st.button("Predict"):
-    try:
-        prediction = selected_model.predict(patient_data)
-        prediction_proba = None
-        if hasattr(selected_model, "predict_proba"):
-            prediction_proba = selected_model.predict_proba(patient_data)
-
-        st.subheader("Prediction Result")
-        if prediction[0] == 1:
-            st.error("Patient is likely to have lung cancer.")
-        else:
-            st.success("Patient is unlikely to have lung cancer.")
-
-        if prediction_proba is not None:
-            st.subheader("Prediction Probability")
-            st.write(pd.DataFrame(prediction_proba, columns=selected_model.classes_))
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
+    pred = selected_model.predict(patient_data)
+    pred_proba = selected_model.predict_proba(patient_data) if hasattr(selected_model, "predict_proba") else None
+    
+    st.subheader("Prediction Result")
+    if pred[0] == 1:
+        st.error("⚠️ Patient is likely to have Lung Cancer.")
+    else:
+        st.success("✅ Patient is unlikely to have Lung Cancer.")
+    
+    if pred_proba is not None:
+        st.subheader("Prediction Probability")
+        st.write(pd.DataFrame(pred_proba, columns=selected_model.classes_))
