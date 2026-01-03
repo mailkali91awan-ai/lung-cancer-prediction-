@@ -36,10 +36,9 @@ patient_inputs = {}
 with st.form("patient_form"):
     for col in feature_encoders.keys():
         if col.lower() == "age":  # numeric input
-            patient_inputs[col] = st.number_input(
-                label=col, min_value=1, max_value=120, value=50
-            )
-        else:  # categorical input
+            patient_inputs[col] = st.number_input(col, min_value=1, max_value=120, value=50)
+        else:
+            # Use the classes from the saved LabelEncoder
             categories = list(feature_encoders[col].classes_)
             patient_inputs[col] = st.selectbox(col, categories)
     
@@ -54,11 +53,19 @@ if submit:
 
     # Encode categorical features safely
     for col, le in feature_encoders.items():
+        # Only encode if the column exists in the DataFrame
         if col in patient_df.columns:
-            patient_df[col] = le.transform(patient_df[col])
+            try:
+                patient_df[col] = le.transform(patient_df[col])
+            except Exception as e:
+                st.error(f"Error encoding column '{col}': {e}")
+        else:
+            st.warning(f"Column '{col}' missing in input data!")
 
-    # Make prediction
-    pred_encoded = selected_model.predict(patient_df)
-    pred_label = target_encoder.inverse_transform(pred_encoded)
-
-    st.success(f"Predicted Lung Cancer Level ({selected_model_name}): {pred_label[0]}")
+    # Predict
+    try:
+        pred_encoded = selected_model.predict(patient_df)
+        pred_label = target_encoder.inverse_transform(pred_encoded)
+        st.success(f"Predicted Lung Cancer Level ({selected_model_name}): {pred_label[0]}")
+    except Exception as e:
+        st.error(f"Prediction failed: {e}")
