@@ -61,8 +61,8 @@ with st.form("patient_form"):
 # Prediction Logic
 # ------------------------------------------
 if submit:
-    # Create DataFrame
-    patient_data = pd.DataFrame([{
+    # Create input dictionary
+    new_patient = {
         "Age": Age,
         "Gender": Gender,
         "Air Pollution": Air_Pollution,
@@ -86,14 +86,20 @@ if submit:
         "Frequent Cold": Frequent_Cold,
         "Dry Cough": Dry_Cough,
         "Snoring": Snoring
-    }])
+    }
 
-    # Encode categorical features
+    # Convert to DataFrame
+    patient_df = pd.DataFrame([new_patient])
+
+    # Encode categorical features safely
     for col, le in feature_encoders.items():
-        patient_data[col] = le.transform(patient_data[col])
+        if col in patient_df.columns:
+            patient_df[col] = le.transform(patient_df[col])
+        else:
+            st.warning(f"Column {col} missing in input data!")
 
     # Predict
-    pred_encoded = selected_model.predict(patient_data)
+    pred_encoded = selected_model.predict(patient_df)
     pred_label = target_encoder.inverse_transform(pred_encoded)
 
     st.success(f"Predicted Lung Cancer Level ({selected_model_name}): {pred_label[0]}")
