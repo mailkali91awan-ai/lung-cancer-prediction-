@@ -2,30 +2,32 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import joblib
 import os
 import warnings
 
-# -----------------------------
-# Suppress warnings (optional)
-# -----------------------------
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore")
 
 # -----------------------------
-# Load combined model file
+# Load model package
 # -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "lung_cancer_all_models.pkl")
 
-with open(MODEL_PATH, "rb") as f:
-    data = pickle.load(f)
+model_package = joblib.load(MODEL_PATH)
 
-feature_encoders = data["encoders"]
-models = data["models"]     # dict of all models
+# Unpack everything
+feature_encoders = model_package["feature_encoders"]
+target_encoder = model_package["target_encoder"]
+
+models = {
+    "Logistic Regression": model_package["logistic_regression"],
+    "Random Forest": model_package["random_forest"],
+    "Support Vector Machine": model_package["svm"],
+}
 
 # -----------------------------
-# Streamlit App UI
+# Streamlit UI
 # -----------------------------
 st.title("Lung Cancer Prediction App")
 
@@ -68,17 +70,18 @@ def user_input_features():
 
     return pd.DataFrame(data, index=[0])
 
+
 patient_data = user_input_features()
 
 # -----------------------------
-# Encode categorical features
+# Encode categorical columns
 # -----------------------------
 for col, encoder in feature_encoders.items():
-    if col in patient_data.columns:
+    if col in patient_data:
         patient_data[col] = encoder.transform(patient_data[col])
 
 # -----------------------------
-# Model selection
+# Select model
 # -----------------------------
 model_choice = st.sidebar.selectbox("Select Model", list(models.keys()))
 selected_model = models[model_choice]
@@ -88,14 +91,14 @@ selected_model = models[model_choice]
 # -----------------------------
 if st.button("Predict"):
     pred = selected_model.predict(patient_data)
-    pred_proba = selected_model.predict_proba(patient_data) if hasattr(selected_model, "predict_proba") else None
+    pred_label = target_encoder.inverse_transform(pred)
 
     st.subheader("Prediction Result")
-    if pred[0] == 1:
+    if pred_label[0] == "Yes":
         st.error("⚠️ Patient is likely to have Lung Cancer.")
     else:
         st.success("✅ Patient is unlikely to have Lung Cancer.")
 
-    if pred_proba is not None:
+    if hasattr(selected_model, "predict_proba"):
         st.subheader("Prediction Probability")
-        st.write(pd.DataFrame(pred_proba, columns=selected_model.classes_))
+        st.write(selected_model.predict_proba(patient_data))
