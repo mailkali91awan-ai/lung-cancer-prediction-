@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import os
 import warnings
 
 # -----------------------------
@@ -12,29 +13,16 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # -----------------------------
-# Load saved models & encoders
+# Load combined model file
 # -----------------------------
-with open("models/feature_encoders.pkl", "rb") as f:
-    feature_encoders = pickle.load(f)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "lung_cancer_all_models.pkl")
 
-with open("models/logistic_model.pkl", "rb") as f:
-    logistic_model = pickle.load(f)
+with open(MODEL_PATH, "rb") as f:
+    data = pickle.load(f)
 
-with open("models/decision_tree_model.pkl", "rb") as f:
-    decision_tree_model = pickle.load(f)
-
-with open("models/random_forest_model.pkl", "rb") as f:
-    random_forest_model = pickle.load(f)
-
-with open("models/svc_model.pkl", "rb") as f:
-    svc_model = pickle.load(f)
-
-models = {
-    "Logistic Regression": logistic_model,
-    "Decision Tree": decision_tree_model,
-    "Random Forest": random_forest_model,
-    "SVC": svc_model
-}
+feature_encoders = data["encoders"]
+models = data["models"]     # dict of all models
 
 # -----------------------------
 # Streamlit App UI
@@ -59,7 +47,7 @@ def user_input_features():
     Shortness_of_Breath = st.sidebar.selectbox("Shortness of Breath", ["Yes", "No"])
     Swallowing_Difficulty = st.sidebar.selectbox("Swallowing Difficulty", ["Yes", "No"])
     Chest_Pain = st.sidebar.selectbox("Chest Pain", ["Yes", "No"])
-    
+
     data = {
         "Gender": Gender,
         "Age": Age,
@@ -77,18 +65,17 @@ def user_input_features():
         "Swallowing_Difficulty": Swallowing_Difficulty,
         "Chest_Pain": Chest_Pain
     }
-    
-    features = pd.DataFrame(data, index=[0])
-    return features
+
+    return pd.DataFrame(data, index=[0])
 
 patient_data = user_input_features()
 
 # -----------------------------
-# Encode categorical features safely
+# Encode categorical features
 # -----------------------------
-for col, le in feature_encoders.items():
+for col, encoder in feature_encoders.items():
     if col in patient_data.columns:
-        patient_data[col] = le.transform(patient_data[col])
+        patient_data[col] = encoder.transform(patient_data[col])
 
 # -----------------------------
 # Model selection
@@ -102,13 +89,13 @@ selected_model = models[model_choice]
 if st.button("Predict"):
     pred = selected_model.predict(patient_data)
     pred_proba = selected_model.predict_proba(patient_data) if hasattr(selected_model, "predict_proba") else None
-    
+
     st.subheader("Prediction Result")
     if pred[0] == 1:
         st.error("⚠️ Patient is likely to have Lung Cancer.")
     else:
         st.success("✅ Patient is unlikely to have Lung Cancer.")
-    
+
     if pred_proba is not None:
         st.subheader("Prediction Probability")
         st.write(pd.DataFrame(pred_proba, columns=selected_model.classes_))
