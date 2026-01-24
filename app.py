@@ -1,104 +1,172 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pickle
 import joblib
-import os
-import warnings
 
-warnings.filterwarnings("ignore")
+# -------------------------
+# Load the saved models
+# -------------------------
+@st.cache_resource
+def load_model_package():
+    return joblib.load("lung_cancer_all_models.pkl")
 
-# -----------------------------
-# Load model package
-# -----------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "lung_cancer_all_models.pkl")
+model_package = load_model_package()
 
-model_package = joblib.load(MODEL_PATH)
-
-# Unpack everything
-feature_encoders = model_package["feature_encoders"]
-target_encoder = model_package["target_encoder"]
-
+# Expected keys from your training script
 models = {
-    "Logistic Regression": model_package["logistic_regression"],
-    "Random Forest": model_package["random_forest"],
-    "Support Vector Machine": model_package["svm"],
+    "Logistic Regression": model_package.get("logistic_regression"),
+    "Random Forest": model_package.get("random_forest"),
+    "SVM": model_package.get("svm"),
 }
+feature_encoders = model_package.get("feature_encoders", {})
+target_encoder = model_package.get("target_encoder", None)
 
-# -----------------------------
+# Features used in the Cancer Patients & Air Pollution dataset
+FEATURES = [
+    "Age",
+    "Air Pollution",
+    "Alcohol use",
+    "Dust Allergy",
+    "OccuPational Hazards",
+    "Genetic Risk",
+    "chronic Lung Disease",
+    "Balanced Diet",
+    "Obesity",
+    "Smoking",
+    "Passive Smoker",
+    "Chest Pain",
+    "Coughing of Blood",
+    "Fatigue",
+    "Weight Loss",
+    "Shortness of Breath",
+    "Wheezing",
+    "Swallowing Difficulty",
+    "Clubbing of Finger Nails",
+    "Frequent Cold",
+    "Dry Cough",
+    "Snoring",
+]
+
+# -------------------------
 # Streamlit UI
-# -----------------------------
-st.title("Lung Cancer Prediction App")
+# -------------------------
 
-st.sidebar.header("Input Patient Data")
+st.set_page_config(page_title="Lung Cancer Prediction", layout="centered")
 
-def user_input_features():
-    Gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
-    Age = st.sidebar.slider("Age", 1, 120, 30)
-    Smoking = st.sidebar.selectbox("Smoking", ["Yes", "No"])
-    Yellow_Fingers = st.sidebar.selectbox("Yellow Fingers", ["Yes", "No"])
-    Anxiety = st.sidebar.selectbox("Anxiety", ["Yes", "No"])
-    Peer_Pressure = st.sidebar.selectbox("Peer Pressure", ["Yes", "No"])
-    Chronic_Disease = st.sidebar.selectbox("Chronic Disease", ["Yes", "No"])
-    Fatigue = st.sidebar.selectbox("Fatigue", ["Yes", "No"])
-    Allergy = st.sidebar.selectbox("Allergy", ["Yes", "No"])
-    Wheezing = st.sidebar.selectbox("Wheezing", ["Yes", "No"])
-    Alcohol_Consuming = st.sidebar.selectbox("Alcohol Consuming", ["Yes", "No"])
-    Coughing = st.sidebar.selectbox("Coughing", ["Yes", "No"])
-    Shortness_of_Breath = st.sidebar.selectbox("Shortness of Breath", ["Yes", "No"])
-    Swallowing_Difficulty = st.sidebar.selectbox("Swallowing Difficulty", ["Yes", "No"])
-    Chest_Pain = st.sidebar.selectbox("Chest Pain", ["Yes", "No"])
+st.title("Lung Cancer Risk Prediction")
+st.write(
+    """
+This app uses machine learning models (Logistic Regression, Random Forest, and SVM)  
+trained on the **Cancer Patients and Air Pollution** dataset to predict lung cancer level.
+"""
+)
 
-    data = {
-        "Gender": Gender,
-        "Age": Age,
-        "Smoking": Smoking,
-        "Yellow_Fingers": Yellow_Fingers,
-        "Anxiety": Anxiety,
-        "Peer_Pressure": Peer_Pressure,
-        "Chronic_Disease": Chronic_Disease,
-        "Fatigue": Fatigue,
-        "Allergy": Allergy,
-        "Wheezing": Wheezing,
-        "Alcohol_Consuming": Alcohol_Consuming,
-        "Coughing": Coughing,
-        "Shortness_of_Breath": Shortness_of_Breath,
-        "Swallowing_Difficulty": Swallowing_Difficulty,
-        "Chest_Pain": Chest_Pain
-    }
+st.sidebar.header("Model Selection")
+model_name = st.sidebar.selectbox("Choose a model", list(models.keys()))
+model = models[model_name]
 
-    return pd.DataFrame(data, index=[0])
+st.sidebar.markdown("---")
+st.sidebar.write("Fill in the patient information on the main page and click **Predict**.")
 
 
-patient_data = user_input_features()
+def get_user_input():
+    st.header("Patient Information")
 
-# -----------------------------
-# Encode categorical columns
-# -----------------------------
-for col, encoder in feature_encoders.items():
-    if col in patient_data:
-        patient_data[col] = encoder.transform(patient_data[col])
+    st.markdown(
+        """
+- **Age**: actual age in years  
+- All other risk factors are on a **1–8 scale**  
+  - 1 = very low / no severity  
+  - 8 = very high severity
+"""
+    )
 
-# -----------------------------
-# Select model
-# -----------------------------
-model_choice = st.sidebar.selectbox("Select Model", list(models.keys()))
-selected_model = models[model_choice]
+    data = {}
 
-# -----------------------------
-# Prediction
-# -----------------------------
+    # Age
+    data["Age"] = st.slider("Age (years)", 20, 90, 50, step=1)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        data["Air Pollution"] = st.slider("Air Pollution", 1, 8, 4, step=1)
+        data["Alcohol use"] = st.slider("Alcohol use", 1, 8, 2, step=1)
+        data["Dust Allergy"] = st.slider("Dust Allergy", 1, 8, 3, step=1)
+        data["OccuPational Hazards"] = st.slider("OccuPational Hazards", 1, 8, 3, step=1)
+        data["Genetic Risk"] = st.slider("Genetic Risk", 1, 8, 4, step=1)
+        data["chronic Lung Disease"] = st.slider("chronic Lung Disease", 1, 8, 2, step=1)
+        data["Balanced Diet"] = st.slider("Balanced Diet", 1, 8, 4, step=1)
+        data["Obesity"] = st.slider("Obesity", 1, 8, 3, step=1)
+        data["Smoking"] = st.slider("Smoking", 1, 8, 4, step=1)
+        data["Passive Smoker"] = st.slider("Passive Smoker", 1, 8, 2, step=1)
+        data["Chest Pain"] = st.slider("Chest Pain", 1, 8, 3, step=1)
+
+    with col2:
+        data["Coughing of Blood"] = st.slider("Coughing of Blood", 1, 8, 1, step=1)
+        data["Fatigue"] = st.slider("Fatigue", 1, 8, 3, step=1)
+        data["Weight Loss"] = st.slider("Weight Loss", 1, 8, 2, step=1)
+        data["Shortness of Breath"] = st.slider("Shortness of Breath", 1, 8, 3, step=1)
+        data["Wheezing"] = st.slider("Wheezing", 1, 8, 3, step=1)
+        data["Swallowing Difficulty"] = st.slider("Swallowing Difficulty", 1, 8, 1, step=1)
+        data["Clubbing of Finger Nails"] = st.slider("Clubbing of Finger Nails", 1, 8, 1, step=1)
+        data["Frequent Cold"] = st.slider("Frequent Cold", 1, 8, 3, step=1)
+        data["Dry Cough"] = st.slider("Dry Cough", 1, 8, 3, step=1)
+        data["Snoring"] = st.slider("Snoring", 1, 8, 3, step=1)
+
+    # Build DataFrame with columns in the same order as training
+    df_input = pd.DataFrame([data], columns=FEATURES)
+    return df_input
+
+
+input_df = get_user_input()
+
+st.markdown("---")
+
 if st.button("Predict"):
-    pred = selected_model.predict(patient_data)
-    pred_label = target_encoder.inverse_transform(pred)
+    X_input = input_df.copy()
+
+    # If you ever had categorical feature encoders, apply them here
+    # (for this dataset, features are numeric so this usually does nothing)
+    for col, le in feature_encoders.items():
+        if col in X_input.columns:
+            X_input[col] = le.transform(X_input[col])
+
+    # Predict
+    pred = model.predict(X_input)[0]
+
+    # Map prediction back to original label if target encoder exists
+    if target_encoder is not None:
+        try:
+            pred_label = target_encoder.inverse_transform([pred])[0]
+        except Exception:
+            pred_label = str(pred)
+    else:
+        pred_label = str(pred)
 
     st.subheader("Prediction Result")
-    if pred_label[0] == "Yes":
-        st.error("⚠️ Patient is likely to have Lung Cancer.")
-    else:
-        st.success("✅ Patient is unlikely to have Lung Cancer.")
+    st.write(f"**Predicted Lung Cancer Level:** {pred_label}")
 
-    if hasattr(selected_model, "predict_proba"):
-        st.subheader("Prediction Probability")
-        st.write(selected_model.predict_proba(patient_data))
+    # Show probabilities if available
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(X_input)[0]
+
+        if target_encoder is not None:
+            try:
+                class_labels = target_encoder.inverse_transform(
+                    np.arange(len(proba))
+                )
+            except Exception:
+                class_labels = [str(i) for i in range(len(proba))]
+        else:
+            class_labels = [str(i) for i in range(len(proba))]
+
+        proba_df = (
+            pd.DataFrame({"Class": class_labels, "Probability": proba})
+            .sort_values("Probability", ascending=False)
+            .reset_index(drop=True)
+        )
+
+        st.subheader("Prediction Probabilities")
+        st.dataframe(proba_df)
+else:
+    st.info("Set the patient parameters above and click **Predict** to see the result.")
