@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 
 # -------------------------
-# Load the saved model package
+# Load saved models & encoders
 # -------------------------
 @st.cache_resource
 def load_model_package():
@@ -12,19 +12,17 @@ def load_model_package():
 
 model_package = load_model_package()
 
-# All trained models
 models = {
     "Logistic Regression": model_package.get("logistic_regression"),
     "Random Forest": model_package.get("random_forest"),
     "SVM": model_package.get("svm"),
 }
 
-# Encoders used during training
 feature_encoders = model_package.get("feature_encoders", {})
 target_encoder = model_package.get("target_encoder", None)
 
 # -------------------------
-# Features (MUST match training EXACTLY)
+# MUST match training order
 # -------------------------
 FEATURES = [
     "Age",
@@ -53,16 +51,15 @@ FEATURES = [
 ]
 
 # -------------------------
-# Streamlit UI
+# UI Settings
 # -------------------------
-
 st.set_page_config(page_title="Lung Cancer Prediction", layout="centered")
 
 st.title("🔍 Lung Cancer Risk Prediction")
 st.write(
     """
-This app uses machine learning models trained on the **Cancer Patients & Air Pollution** dataset  
-to predict **Lung Cancer Level** based on various risk factors.
+This machine learning app predicts **Lung Cancer Level**  
+using models trained on the *Cancer Patients & Air Pollution* dataset.
 """
 )
 
@@ -70,27 +67,14 @@ st.sidebar.header("Model Selection")
 model_name = st.sidebar.selectbox("Choose a model", list(models.keys()))
 model = models[model_name]
 
-st.sidebar.markdown("---")
-st.sidebar.info("Fill the patient details and click **Predict**.")
-
 # -------------------------
-# User Input Function
+# User Input Form
 # -------------------------
 def get_user_input():
     st.header("Patient Information")
 
-    st.markdown(
-        """
-- **Age**: actual age in years  
-- All other features are rated on a **1–8 severity scale**  
-1 = Very low | 8 = Very high  
-"""
-    )
-
     data = {}
-
-    # Age
-    data["Age"] = st.slider("Age (years)", 20, 90, 50, step=1)
+    data["Age"] = st.slider("Age (years)", 20, 90, 45)
 
     # Gender (Categorical)
     data["Gender"] = st.selectbox("Gender", ["Male", "Female"])
@@ -122,31 +106,31 @@ def get_user_input():
         data["Dry Cough"] = st.slider("Dry Cough", 1, 8, 3)
         data["Snoring"] = st.slider("Snoring", 1, 8, 3)
 
-    # DataFrame in correct order
-    df_input = pd.DataFrame([data], columns=FEATURES)
-    return df_input
+    df = pd.DataFrame([data], columns=FEATURES)
+    return df
 
 
-# Input DF
 input_df = get_user_input()
-
 st.markdown("---")
 
 # -------------------------
-# Prediction Button
+# Prediction
 # -------------------------
 if st.button("Predict"):
     X_input = input_df.copy()
 
-    # Apply encoders (Gender only)
+    # Apply encoders (only Gender)
     for col, le in feature_encoders.items():
         if col in X_input.columns:
             X_input[col] = le.transform(X_input[col])
 
-    # Predict
+    # 🔥 FIX: Convert all values to numeric
+    X_input = X_input.apply(pd.to_numeric, errors="coerce")
+
+    # Predict class
     pred = model.predict(X_input)[0]
 
-    # Decode prediction (Level 0 / 1 / 2)
+    # Decode class label
     if target_encoder is not None:
         try:
             pred_label = target_encoder.inverse_transform([pred])[0]
@@ -158,11 +142,10 @@ if st.button("Predict"):
     st.subheader("🎯 Prediction Result")
     st.success(f"**Predicted Lung Cancer Level:** {pred_label}")
 
-    # If model supports probability outputs
+    # Probability Table (if available)
     if hasattr(model, "predict_proba"):
         proba = model.predict_proba(X_input)[0]
 
-        # Class names
         if target_encoder is not None:
             try:
                 class_labels = target_encoder.inverse_transform(
@@ -183,4 +166,4 @@ if st.button("Predict"):
         st.dataframe(proba_df)
 
 else:
-    st.info("Fill the patient parameters above and click **Predict** to get results.")
+    st.info("Adjust the parameters above and click **Predict** to see the lung cancer risk level.")
